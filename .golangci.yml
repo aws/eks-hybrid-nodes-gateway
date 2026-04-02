@@ -1,0 +1,38 @@
+version: "2"
+run:
+  build-tags:
+    - e2e
+linters:
+  exclusions:
+    presets:
+      - std-error-handling
+    paths:
+      - zz_generated.*\.go$
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - '-ST1000'
+        - '-ST1003'
+        - '-ST1016'
+        - '-ST1020'
+        - '-ST1021'
+        - '-ST1022'
+        - '-ST1001'
+        - '-ST1005'
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/aws/hybrid-gateway)
+      custom-order: true
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    paths:
+      - zz_generated.*\.go$

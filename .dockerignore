@@ -1,0 +1,12 @@
+.git
+.gitignore
+*.md
+*.yaml
+deploy/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.test
+*.out

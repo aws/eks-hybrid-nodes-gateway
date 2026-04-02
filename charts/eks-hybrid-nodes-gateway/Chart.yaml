@@ -1,0 +1,16 @@
+apiVersion: v2
+name: eks-hybrid-nodes-gateway
+description: VXLAN gateway controller for EKS Hybrid Nodes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/aws/eks-hybrid-nodes-gateway
+sources:
+  - https://github.com/aws/eks-hybrid-nodes-gateway
+maintainers:
+  - name: EKS Hybrid Nodes Team
+keywords:
+  - eks
+  - hybrid-nodes
+  - vxlan
+  - gateway

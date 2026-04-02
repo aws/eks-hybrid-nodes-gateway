@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "eks-hybrid-nodes-gateway.fullname" . }}
+  namespace: {{ include "eks-hybrid-nodes-gateway.namespace" . }}
+  labels:
+    {{- include "eks-hybrid-nodes-gateway.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]

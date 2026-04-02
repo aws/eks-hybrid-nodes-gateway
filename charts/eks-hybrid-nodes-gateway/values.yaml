@@ -1,0 +1,34 @@
+# eks-hybrid-nodes-gateway
+
+image:
+  # -- Container image repository (REQUIRED)
+  repository: ""
+  # -- Image tag, defaults to Chart appVersion
+  tag: ""
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Number of gateway replicas
+replicas: 2
+
+# -- Namespace for gateway resources. Defaults to the Helm release namespace.
+namespace: ""
+
+# -- Create the namespace resource if it doesn't exist
+createNamespace: true
+
+# -- Node label key used to select gateway nodes
+nodeLabel: hybrid-gateway-node
+
+# -- VPC CIDR for route programming (REQUIRED)
+vpcCIDR: ""
+# -- Comma-separated pod CIDRs used by Cilium on hybrid nodes (REQUIRED)
+podCIDRs: ""
+# -- Comma-separated route table IDs to program
+routeTableIDs: ""
+
+# -- EKS Auto Mode configuration
+autoMode:
+  # -- Enable Auto Mode (adds compute-type nodeSelector, zero-downtime strategy).
+  # Set to false for Managed Node Groups.
+  enabled: true

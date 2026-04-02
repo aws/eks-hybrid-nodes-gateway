@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "eks-hybrid-nodes-gateway.fullname" . }}
+  namespace: {{ include "eks-hybrid-nodes-gateway.namespace" . }}
+  labels:
+    {{- include "eks-hybrid-nodes-gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "eks-hybrid-nodes-gateway.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      {{- if .Values.autoMode.enabled }}
+      maxSurge: 1
+      maxUnavailable: 0
+      {{- else }}
+      maxSurge: 0
+      maxUnavailable: 1
+      {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "eks-hybrid-nodes-gateway.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "eks-hybrid-nodes-gateway.serviceAccountName" . }}
+      hostNetwork: true
+      nodeSelector:
+        {{ .Values.nodeLabel }}: "true"
+        {{- if .Values.autoMode.enabled }}
+        eks.amazonaws.com/compute-type: auto
+        {{- end }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "eks-hybrid-nodes-gateway.selectorLabels" . | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+        - key: {{ .Values.nodeLabel }}
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: gateway
+          image: {{ include "eks-hybrid-nodes-gateway.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_ADMIN"]
+          env:
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: VPC_CIDR
+              value: {{ required "vpcCIDR is required" .Values.vpcCIDR | quote }}
+            - name: POD_CIDRS
+              value: {{ required "podCIDRs is required" .Values.podCIDRs | quote }}
+            - name: ROUTE_TABLE_IDS
+              value: {{ .Values.routeTableIDs | quote }}
+          ports:
+            - name: healthz
+              containerPort: 8088
+              protocol: TCP
+            - name: vxlan
+              containerPort: 8472
+              protocol: UDP
+            - name: metrics
+              containerPort: 10080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10

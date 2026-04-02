@@ -1,0 +1,7 @@
+.git/
+.gitignore
+.github/
+bin/
+coverage.out
+deploy/
+docs/

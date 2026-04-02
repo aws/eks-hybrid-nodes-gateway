@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: netshoot-gateway
+  namespace: kube-system
+  labels:
+    app: netshoot-gateway
+spec:
+  selector:
+    matchLabels:
+      app: netshoot-gateway
+  template:
+    metadata:
+      labels:
+        app: netshoot-gateway
+    spec:
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        hybrid-gateway-node: "true"
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: netshoot
+          image: nicolaka/netshoot
+          command: ["sleep", "infinity"]
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+  updateStrategy:
+    type: RollingUpdate

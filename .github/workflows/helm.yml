@@ -1,0 +1,29 @@
+name: helm
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'charts/**'
+permissions:
+  contents: read
+jobs:
+  helm:
+    name: helm-lint-and-template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: lint
+        run: helm lint charts/eks-hybrid-nodes-gateway
+      - name: template auto mode
+        run: |
+          helm template eks-hybrid-nodes-gateway charts/eks-hybrid-nodes-gateway \
+            --set image.repository=test.example.com/eks-hybrid-nodes-gateway \
+            --set vpcCIDR=10.0.0.0/16 --set podCIDRs=10.86.0.0/16
+      - name: template mng mode
+        run: |
+          helm template eks-hybrid-nodes-gateway charts/eks-hybrid-nodes-gateway \
+            --set autoMode.enabled=false \
+            --set image.repository=test.example.com/eks-hybrid-nodes-gateway \
+            --set vpcCIDR=10.0.0.0/16 --set podCIDRs=10.86.0.0/16
