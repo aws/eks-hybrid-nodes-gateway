@@ -1,0 +1,156 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hybrid-gateway
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hybrid-gateway
+  namespace: hybrid-gateway
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hybrid-gateway
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumnodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hybrid-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hybrid-gateway
+subjects:
+  - kind: ServiceAccount
+    name: hybrid-gateway
+    namespace: hybrid-gateway
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hybrid-gateway
+  namespace: hybrid-gateway
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hybrid-gateway
+  namespace: hybrid-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hybrid-gateway
+subjects:
+  - kind: ServiceAccount
+    name: hybrid-gateway
+    namespace: hybrid-gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hybrid-gateway
+  namespace: hybrid-gateway
+  labels:
+    app: hybrid-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hybrid-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: hybrid-gateway
+    spec:
+      serviceAccountName: hybrid-gateway
+      hostNetwork: true
+      nodeSelector:
+        hybrid-gateway-node: "true"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: hybrid-gateway
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+        - key: hybrid-gateway-node
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: gateway
+          image: __IMAGE__
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_ADMIN"]
+          env:
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: LEADER_ELECTION_NAMESPACE
+              value: "hybrid-gateway"
+            - name: ENABLE_SNAT
+              value: "true"
+            - name: VXLAN_CIDR
+              value: "__VXLAN_CIDR__"
+            - name: VPC_CIDR
+              value: "__VPC_CIDR__"
+            - name: POD_CIDR
+              value: "__POD_CIDR__"
+            - name: ROUTE_TABLE_IDS
+              value: "__ROUTE_TABLE_IDS__"
+          ports:
+            - name: healthz
+              containerPort: 8088
+              protocol: TCP
+            - name: vxlan
+              containerPort: 8472
+              protocol: UDP
+            - name: metrics
+              containerPort: 10080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

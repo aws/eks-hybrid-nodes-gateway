@@ -1,0 +1,13 @@
+version: 0.2
+phases:
+  build:
+    commands:
+      - ./hack/build-gateway.sh $CODEBUILD_RESOLVED_SOURCE_VERSION
+cache:
+  paths:
+    - '/root/.cache/go-build/**/*'
+    - '/go/pkg/mod/**/*'
+artifacts:
+  files:
+    - "_output/**/*"
+    - "bin/**/*"

@@ -1,0 +1,38 @@
+name: build-and-unit-test
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - main
+  pull_request:
+    paths:
+      - '**'
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          check-latest: true
+          cache: true
+      - name: build application
+        run: make build
+  test:
+    name: unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          check-latest: true
+          cache: true
+      - name: test application
+        run: go test -count=1 -cover ./...

@@ -1,0 +1,17 @@
+eks-hybrid-nodes-gateway has been installed.
+
+Ensure your gateway nodes are labeled:
+  kubectl label node <node-name> hybrid-gateway-node=true
+{{- if .Values.autoMode.enabled }}
+
+EKS Auto Mode is enabled. Create a NodePool separately:
+  See https://github.com/aws/eks-hybrid-nodes-gateway/blob/main/docs/auto-mode.md
+{{- else }}
+
+Managed Node Group mode is enabled.
+Taint your gateway nodes to prevent other workloads from scheduling:
+  kubectl taint node <node-name> hybrid-gateway-node=true:NoSchedule
+{{- end }}
+
+Verify the gateway is running:
+  kubectl get pods -n {{ .Release.Namespace }} -l {{ include "eks-hybrid-nodes-gateway.selectorLabels" . | replace ": " "=" | replace "\n" "," }}
