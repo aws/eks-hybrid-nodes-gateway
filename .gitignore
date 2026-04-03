@@ -13,3 +13,4 @@ vendor/
 *.swo
 *~
 .DS_Store
+eks-hybrid-nodes-gateway-*.tgz

@@ -215,6 +215,17 @@ The gateway exposes Prometheus metrics on `:10080/metrics`.
 └── .github/workflows/           CI: build+test, golangci-lint, helm validation, govulncheck
 ```
 
+## End-to-End Tests
+
+See [test/e2e/README.md](test/e2e/README.md) for details.
+
+```bash
+make e2e \
+  GATEWAY_IMAGE=<ecr-uri>:tag \
+  GATEWAY_CHART=oci://<ecr-uri> \
+  GATEWAY_CHART_VERSION=0.0.0-tag
+```
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.

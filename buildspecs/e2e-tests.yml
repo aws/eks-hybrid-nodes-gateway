@@ -1,0 +1,9 @@
+version: 0.2
+phases:
+  build:
+    commands:
+      - ./hack/run-e2e-tests.sh
+cache:
+  paths:
+    - '/root/.cache/go-build/**/*'
+    - '/go/pkg/mod/**/*'

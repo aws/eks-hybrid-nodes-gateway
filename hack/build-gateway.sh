@@ -19,6 +19,12 @@ make lint
 echo "Building binaries..."
 make build
 
+echo "Building e2e test binary..."
+make build-e2e
+
+echo "Building Ginkgo test binary..."
+make build-e2e-test
+
 echo "Generating checksums..."
 for ARCH in amd64 arm64; do
   (cd bin/linux/${ARCH} && sha256sum gateway > gateway.sha256)
