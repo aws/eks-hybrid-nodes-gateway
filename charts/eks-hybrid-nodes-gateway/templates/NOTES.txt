@@ -4,8 +4,9 @@ Ensure your gateway nodes are labeled:
   kubectl label node <node-name> hybrid-gateway-node=true
 {{- if .Values.autoMode.enabled }}
 
-EKS Auto Mode is enabled. Create a NodePool separately:
-  See https://github.com/aws/eks-hybrid-nodes-gateway/blob/main/docs/auto-mode.md
+EKS Auto Mode is enabled. Create a NodePool separately that targets nodes
+with the label hybrid-gateway-node=true and the taint
+hybrid-gateway-node=true:NoSchedule.
 {{- else }}
 
 Managed Node Group mode is enabled.
