@@ -11,3 +11,5 @@ artifacts:
   files:
     - "_output/**/*"
     - "bin/**/*"
+    - "buildspecs/*"
+    - "hack/*"

@@ -8,7 +8,10 @@ BIN_DIR    := bin
 CHART_DIR  := charts/eks-hybrid-nodes-gateway
 CHART_REPO ?= oci://$(REGISTRY)
 
-.PHONY: build build-amd64 build-arm64 test test-cover lint fmt docker-build docker-push helm-lint helm-template helm-package helm-push clean help
+GOBIN      := $(shell go env GOPATH)/bin
+GINKGO_VERSION := $(word 2,$(shell go list -m github.com/onsi/ginkgo/v2))
+
+.PHONY: build build-amd64 build-arm64 test test-cover lint fmt docker-build docker-push helm-lint helm-template helm-package helm-push ginkgo e2e build-e2e clean help
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -67,3 +70,36 @@ helm-package: ## Package Helm chart (optional CHART_VERSION, APP_VERSION)
 
 helm-push: helm-package ## Push Helm chart to OCI registry
 	helm push eks-hybrid-nodes-gateway-*.tgz $(CHART_REPO)
+
+build-e2e: ## Build e2e test binary
+	CGO_ENABLED=0 go build -tags e2e -o $(BIN_DIR)/e2e-test ./test/e2e/cmd/
+
+build-e2e-test: ## Build Ginkgo test binary
+	CGO_ENABLED=0 go test -c -tags e2e -o $(BIN_DIR)/gateway.test ./test/e2e/
+
+ginkgo: ## Install ginkgo binary (pinned to module version)
+	@test -x $(GOBIN)/ginkgo || \
+		(echo "Installing ginkgo $(GINKGO_VERSION)..." && \
+		 GOBIN=$(GOBIN) CGO_ENABLED=0 go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION))
+
+K8S_VERSION    ?= 1.31
+AWS_REGION     ?= us-west-2
+E2E_TIMEOUT    ?= 60m
+SKIP_CLEANUP   ?= false
+
+e2e: ## Run e2e tests (requires GATEWAY_IMAGE, GATEWAY_CHART, GATEWAY_CHART_VERSION)
+	@test -n "$(GATEWAY_IMAGE)" || (echo "error: GATEWAY_IMAGE is required (e.g. 123456.dkr.ecr.us-west-2.amazonaws.com/eks-hybrid-nodes-gateway:abc12345)"; exit 1)
+	@test -n "$(GATEWAY_CHART)" || (echo "error: GATEWAY_CHART is required (e.g. oci://123456.dkr.ecr.us-west-2.amazonaws.com/eks-hybrid-nodes-gateway)"; exit 1)
+	@test -n "$(GATEWAY_CHART_VERSION)" || (echo "error: GATEWAY_CHART_VERSION is required (e.g. 0.0.0-abc12345)"; exit 1)
+	@$(MAKE) build-e2e-test
+	@$(MAKE) ginkgo
+	@$(MAKE) build-e2e
+	PATH="$(GOBIN):$(PATH)" \
+	GATEWAY_IMAGE=$(GATEWAY_IMAGE) \
+	GATEWAY_CHART=$(GATEWAY_CHART) \
+	GATEWAY_CHART_VERSION=$(GATEWAY_CHART_VERSION) \
+	K8S_VERSION=$(K8S_VERSION) \
+	AWS_REGION=$(AWS_REGION) \
+	SKIP_CLEANUP=$(SKIP_CLEANUP) \
+	E2E_TIMEOUT=$(E2E_TIMEOUT) \
+	$(BIN_DIR)/e2e-test
