@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
@@ -60,8 +61,9 @@ func NewSetup(
 func (g *Setup) Start(ctx context.Context) error {
 	setupStart := time.Now()
 
-	// Mark this instance as leader
+	// Mark this instance as leader; reset on exit regardless of success or failure.
 	gwmetrics.LeaderIsActive.Set(1)
+	defer gwmetrics.LeaderIsActive.Set(0)
 
 	// Update AWS route tables so traffic for hybrid pod CIDRs routes to this instance
 	if g.routeTableManager != nil {
@@ -88,7 +90,7 @@ func (g *Setup) Start(ctx context.Context) error {
 			g.logger,
 		); err != nil {
 			g.logger.Error(err, "Failed to upsert CiliumVTEPConfig")
-			// Don't return error – route tables may still be functional
+			return fmt.Errorf("upserting CiliumVTEPConfig: %w", err)
 		}
 	}
 
@@ -98,8 +100,6 @@ func (g *Setup) Start(ctx context.Context) error {
 
 	<-ctx.Done()
 
-	// No longer leader
-	gwmetrics.LeaderIsActive.Set(0)
 	g.logger.Info("Leadership ended")
 	return nil
 }

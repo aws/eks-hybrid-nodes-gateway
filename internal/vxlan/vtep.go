@@ -22,10 +22,11 @@ const (
 type VTEP struct {
 	iface  *Interface
 	logger logr.Logger
+	nodes  map[string]struct{}
 }
 
 func NewVTEP(iface *Interface) *VTEP {
-	return &VTEP{iface: iface, logger: iface.logger}
+	return &VTEP{iface: iface, logger: iface.logger, nodes: make(map[string]struct{})}
 }
 
 // AddRemoteNode adds a remote hybrid node as a VXLAN tunnel endpoint.
@@ -57,8 +58,9 @@ func (v *VTEP) AddRemoteNode(podCIDR, nodeIP string) error {
 		Gw:        remoteIP,
 		Flags:     int(FLAG_ONLINK),
 	}
-	if err := netlink.RouteAdd(route); err != nil && !isRouteExistsError(err) {
-		return fmt.Errorf("failed to add route: %v", err)
+	if err := netlink.RouteReplace(route); err != nil {
+		gwmetrics.VTEPAddErrorsTotal.Inc()
+		return fmt.Errorf("failed to add/update route for %s: %w", podCIDR, err)
 	}
 
 	// Static ARP: prevents kernel ARP lookups that would learn wrong MAC from Cilium
@@ -70,12 +72,13 @@ func (v *VTEP) AddRemoteNode(podCIDR, nodeIP string) error {
 		IP:           remoteIP,
 		HardwareAddr: uniqueMAC,
 	}); err != nil {
-		v.logger.Error(err, "Warning: failed to add static ARP entry", "nodeIP", nodeIP)
+		gwmetrics.VTEPAddErrorsTotal.Inc()
+		return fmt.Errorf("failed to add static ARP entry for %s: %w", nodeIP, err)
 	}
 
 	// FDB: map the node's unique MAC to its VTEP IP so the VXLAN module sends
 	// only to the correct node instead of broadcasting to all remote endpoints.
-	if err := netlink.NeighAppend(&netlink.Neigh{
+	if err := netlink.NeighSet(&netlink.Neigh{
 		LinkIndex:    linkIdx,
 		Family:       AF_BRIDGE,
 		State:        NUD_PERMANENT,
@@ -83,14 +86,16 @@ func (v *VTEP) AddRemoteNode(podCIDR, nodeIP string) error {
 		IP:           remoteIP,
 		HardwareAddr: uniqueMAC,
 	}); err != nil {
-		return fmt.Errorf("failed to add FDB entry: %v", err)
+		gwmetrics.VTEPAddErrorsTotal.Inc()
+		return fmt.Errorf("failed to add/update FDB entry for %s: %w", nodeIP, err)
 	}
 
 	v.logger.Info("Remote VTEP added", "podCIDR", podCIDR, "nodeIP", nodeIP, "mac", uniqueMAC)
 
 	// Metrics: increment VTEP add counter
 	gwmetrics.VTEPAddTotal.Inc()
-	gwmetrics.HybridNodesConfigured.Inc()
+	v.nodes[nodeIP] = struct{}{}
+	gwmetrics.HybridNodesConfigured.Set(float64(len(v.nodes)))
 
 	return nil
 }
@@ -117,14 +122,17 @@ func (v *VTEP) RemoveRemoteNode(podCIDR, nodeIP string) error {
 	linkIdx := link.Attrs().Index
 
 	if err := netlink.RouteDel(&netlink.Route{LinkIndex: linkIdx, Dst: podNet}); err != nil {
+		gwmetrics.VTEPRemoveErrorsTotal.Inc()
 		v.logger.Error(err, "Warning: failed to remove route", "podCIDR", podCIDR)
 	}
 
 	if err := netlink.NeighDel(&netlink.Neigh{LinkIndex: linkIdx, Family: AF_INET, IP: remoteIP}); err != nil {
+		gwmetrics.VTEPRemoveErrorsTotal.Inc()
 		v.logger.Error(err, "Warning: failed to remove ARP entry", "nodeIP", nodeIP)
 	}
 
 	if err := netlink.NeighDel(&netlink.Neigh{LinkIndex: linkIdx, IP: remoteIP, Family: AF_BRIDGE, Flags: NTF_SELF}); err != nil {
+		gwmetrics.VTEPRemoveErrorsTotal.Inc()
 		v.logger.Error(err, "Warning: failed to remove FDB entry", "nodeIP", nodeIP)
 	}
 
@@ -132,13 +140,10 @@ func (v *VTEP) RemoveRemoteNode(podCIDR, nodeIP string) error {
 
 	// Metrics: increment VTEP remove counter, decrement node count
 	gwmetrics.VTEPRemoveTotal.Inc()
-	gwmetrics.HybridNodesConfigured.Dec()
+	delete(v.nodes, nodeIP)
+	gwmetrics.HybridNodesConfigured.Set(float64(len(v.nodes)))
 
 	return nil
-}
-
-func isRouteExistsError(err error) bool {
-	return err.Error() == "file exists"
 }
 
 // generateMACFromIP creates a unique locally administered MAC from an IP address.
