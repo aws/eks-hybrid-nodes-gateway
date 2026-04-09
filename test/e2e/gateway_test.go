@@ -118,37 +118,99 @@ var _ = Describe("EKS Hybrid Nodes Gateway", func() {
 		})
 
 		Context("Gateway Resilience", func() {
-			It("should recover connectivity after leader pod is deleted", func(ctx context.Context) {
-				Skip("temporarily skipped - pending manual validation")
+			It("should maintain connectivity during leader failover", func(ctx context.Context) {
 				testCaseLabels["test-case"] = "leader-failover"
 
+				// 1. Deploy test pods — one on each side for bidirectional monitoring.
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
-				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, "default", test.Cluster.Region, test.Logger, "nginx-failover", testCaseLabels)
+				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, "default", test.Cluster.Region, test.Logger, "nginx-hybrid-fo", testCaseLabels)
 				Expect(err).NotTo(HaveOccurred())
 
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, "node.kubernetes.io/instance-type", cloudInstanceType, test.Logger)
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, "default", test.Cluster.Region, test.Logger, "client-failover", testCaseLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, "default", test.Cluster.Region, test.Logger, "nginx-cloud-fo", testCaseLabels)
 				Expect(err).NotTo(HaveOccurred())
 
-				test.Logger.Info("Verifying connectivity before failover")
-				err = kubernetes.TestPodToPodConnectivity(ctx, test.K8sClientConfig, test.K8sClient.Interface, "client-failover", "nginx-failover", "default", test.Logger)
-				Expect(err).NotTo(HaveOccurred(), "pre-failover connectivity should work")
+				// 2. Verify baseline connectivity in both directions before starting monitors.
+				test.Logger.Info("Verifying baseline connectivity (cloud → hybrid)")
+				err = kubernetes.TestPodToPodConnectivity(ctx, test.K8sClientConfig, test.K8sClient.Interface, "nginx-cloud-fo", "nginx-hybrid-fo", "default", test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "baseline cloud → hybrid should work")
 
-				test.Logger.Info("Deleting gateway pods to trigger failover")
-				err = kubernetes.DeletePodsWithLabels(ctx, test.K8sClient.Interface, gatewayNamespace, "app.kubernetes.io/name=eks-hybrid-nodes-gateway", test.Logger)
+				test.Logger.Info("Verifying baseline connectivity (hybrid → cloud)")
+				err = kubernetes.TestPodToPodConnectivity(ctx, test.K8sClientConfig, test.K8sClient.Interface, "nginx-hybrid-fo", "nginx-cloud-fo", "default", test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "baseline hybrid → cloud should work")
+
+				// 3. Resolve pod IPs for the continuous monitors.
+				hybridPod, err := test.K8sClient.Interface.CoreV1().Pods("default").Get(ctx, "nginx-hybrid-fo", metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
+				hybridPodIP := hybridPod.Status.PodIP
 
+				cloudPod, err := test.K8sClient.Interface.CoreV1().Pods("default").Get(ctx, "nginx-cloud-fo", metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				cloudPodIP := cloudPod.Status.PodIP
+
+				// 4. Identify the current leader via the Lease object.
+				leaderPodName := findLeaderPod(ctx, test)
+				test.Logger.Info("Identified leader pod", "name", leaderPodName)
+
+				// 5. Start continuous connectivity monitors in both directions.
+				test.Logger.Info("Starting continuous connectivity monitoring")
+				c2h := startConnectivityMonitor(ctx, test, "nginx-cloud-fo", hybridPodIP, "default", "cloud-to-hybrid")
+				h2c := startConnectivityMonitor(ctx, test, "nginx-hybrid-fo", cloudPodIP, "default", "hybrid-to-cloud")
+
+				// 5a. Wait for monitors to accumulate baseline successes. This
+				//     catches broken exec/curl setups before triggering failover
+				//     so the test fails with a clear message instead of silently
+				//     passing with zero probes.
+				minBaselineSuccesses := 5
+				Eventually(func() int { return c2h.successCount() }).
+					WithTimeout(30*time.Second).WithPolling(2*time.Second).Should(BeNumerically(">=", minBaselineSuccesses), "cloud-to-hybrid monitor should record baseline successes")
+				Eventually(func() int { return h2c.successCount() }).
+					WithTimeout(30*time.Second).WithPolling(2*time.Second).Should(BeNumerically(">=", minBaselineSuccesses), "hybrid-to-cloud monitor should record baseline successes")
+				test.Logger.Info("Baseline connectivity confirmed", "minSuccesses", minBaselineSuccesses)
+
+				// 6. Delete only the leader pod — the standby should acquire the
+				//    lease, re-program route tables and VTEP config, and resume
+				//    forwarding traffic with minimal interruption.
+				test.Logger.Info("Deleting leader pod to trigger failover", "leader", leaderPodName)
+				err = test.K8sClient.Interface.CoreV1().Pods(gatewayNamespace).Delete(ctx, leaderPodName, metav1.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred(), "should delete leader pod")
+
+				// 7. Wait for all gateway pods to be running again.
 				test.Logger.Info("Waiting for gateway pods to recover")
 				err = kubernetes.WaitForPodsToBeRunning(ctx, test.K8sClient.Interface, metav1.ListOptions{
 					LabelSelector: "app.kubernetes.io/name=eks-hybrid-nodes-gateway",
 				}, gatewayNamespace, test.Logger)
 				Expect(err).NotTo(HaveOccurred(), "gateway pods should recover")
 
-				test.Logger.Info("Verifying connectivity after failover")
-				Eventually(func(g Gomega) {
-					err := kubernetes.TestPodToPodConnectivity(ctx, test.K8sClientConfig, test.K8sClient.Interface, "client-failover", "nginx-failover", "default", test.Logger)
-					g.Expect(err).NotTo(HaveOccurred())
-				}).WithTimeout(3*time.Minute).WithPolling(10*time.Second).Should(Succeed(), "post-failover connectivity should recover")
+				// 8. Verify a different pod now holds the lease.
+				Eventually(func() (string, error) {
+					return getLeaderPodName(ctx, test)
+				}).WithTimeout(30*time.Second).WithPolling(2*time.Second).ShouldNot(
+					Equal(leaderPodName), "a new leader should be elected after deleting %s", leaderPodName)
+
+				newLeader, _ := getLeaderPodName(ctx, test)
+				test.Logger.Info("New leader elected", "name", newLeader, "previousLeader", leaderPodName)
+
+				// Let post-failover pings accumulate to confirm stable recovery.
+				time.Sleep(30 * time.Second)
+
+				// 9. Stop monitors and analyse results.
+				c2hResults := c2h.stop()
+				h2cResults := h2c.stop()
+
+				test.Logger.Info("=== Failover Connectivity Analysis ===")
+				c2hMaxGap, err := analyzeConnectivity(c2hResults, test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "cloud-to-hybrid analysis should have enough data points")
+				h2cMaxGap, err2 := analyzeConnectivity(h2cResults, test.Logger)
+				Expect(err2).NotTo(HaveOccurred(), "hybrid-to-cloud analysis should have enough data points")
+
+				// 10. Assert the maximum gap between two successful pings never
+				//     exceeded the acceptable failover threshold.
+				maxAcceptableGap := 30 * time.Second
+				Expect(c2hMaxGap).To(BeNumerically("<=", maxAcceptableGap),
+					"cloud-to-hybrid max gap should be ≤%s (was %s)", maxAcceptableGap, c2hMaxGap)
+				Expect(h2cMaxGap).To(BeNumerically("<=", maxAcceptableGap),
+					"hybrid-to-cloud max gap should be ≤%s (was %s)", maxAcceptableGap, h2cMaxGap)
 			})
 		})
 	})

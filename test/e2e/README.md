@@ -159,8 +159,13 @@ complete (unless `SKIP_CLEANUP=true`).
 - **Hybrid → Cloud service**: ClusterIP service on cloud, reached from hybrid pod
 - **Cloud → Hybrid service**: ClusterIP service on hybrid, reached from cloud pod
 
-### Pending — Gateway Resilience
-- **Leader failover**: delete all gateway pods, verify standby recovers connectivity
+### Active — Gateway Resilience
+- **Leader failover**: identifies the current leader via the `hybrid-gateway-leader`
+  Lease, starts continuous bidirectional HTTP probes (cloud → hybrid and hybrid → cloud),
+  deletes only the leader pod, then verifies the standby acquires the lease and
+  re-programs route tables with no connectivity gap exceeding the acceptable threshold.
+  The maximum time between two consecutive successful probes is reported as the
+  failover downtime.
 
 ## Architecture
 
@@ -170,8 +175,9 @@ test/e2e/
 │   └── main.go                 # Orchestrator: sweeps, builds, configures run.E2E
 ├── testdata/
 │   └── cilium-template-1.19.0.yaml  # Pre-rendered Cilium 1.19.0 with VTEP enabled
-├── gateway_suite_test.go       # BeforeSuite: infra setup (nodes, MNGs, Cilium, SGs, gateway)
-├── gateway_test.go             # Ginkgo specs: connectivity, service discovery, failover
+├── gateway_suite_test.go       # SynchronizedBeforeSuite: infra setup (nodes, MNGs, Cilium, SGs, gateway)
+├── gateway_test.go             # Ginkgo specs: connectivity, service discovery, resilience
+├── helpers_test.go             # Reusable test helpers: leader election, connectivity monitor
 └── README.md
 ```
 
