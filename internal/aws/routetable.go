@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -33,9 +34,14 @@ func NewRouteTableManager(ctx context.Context, routeTableIDs []string, instanceI
 		return nil, fmt.Errorf("instance ID is required")
 	}
 
-	// Load AWS SDK configuration
+	// Configure the AWS SDK with a per-attempt HTTP timeout. This guards against
+	// hanging TCP connections without interfering with the SDK's built-in retry
+	// and backoff logic — each retry attempt gets a fresh 30-second window.
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
+		config.WithHTTPClient(&http.Client{
+			Timeout: 30 * time.Second,
+		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
@@ -224,10 +230,7 @@ func (m *RouteTableManager) VerifyRouteTableAccess(ctx context.Context) error {
 			RouteTableIds: []string{routeTableID},
 		}
 
-		verifyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		result, err := m.ec2Client.DescribeRouteTables(verifyCtx, input)
-		cancel()
-
+		result, err := m.ec2Client.DescribeRouteTables(ctx, input)
 		if err != nil {
 			return fmt.Errorf("failed to access route table %s: %w (ensure IAM permissions are correct)", routeTableID, err)
 		}

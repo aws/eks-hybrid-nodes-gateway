@@ -158,14 +158,14 @@ func (c *NetworkStatsCollector) collectVXLAN(ch chan<- prometheus.Metric) {
 
 	// Interface statistics from kernel
 	if stats := attrs.Statistics; stats != nil {
-		ch <- prometheus.MustNewConstMetric(vxlanRxBytesDesc, prometheus.GaugeValue, float64(stats.RxBytes))
-		ch <- prometheus.MustNewConstMetric(vxlanTxBytesDesc, prometheus.GaugeValue, float64(stats.TxBytes))
-		ch <- prometheus.MustNewConstMetric(vxlanRxPacketsDesc, prometheus.GaugeValue, float64(stats.RxPackets))
-		ch <- prometheus.MustNewConstMetric(vxlanTxPacketsDesc, prometheus.GaugeValue, float64(stats.TxPackets))
-		ch <- prometheus.MustNewConstMetric(vxlanRxDroppedDesc, prometheus.GaugeValue, float64(stats.RxDropped))
-		ch <- prometheus.MustNewConstMetric(vxlanTxDroppedDesc, prometheus.GaugeValue, float64(stats.TxDropped))
-		ch <- prometheus.MustNewConstMetric(vxlanRxErrorsDesc, prometheus.GaugeValue, float64(stats.RxErrors))
-		ch <- prometheus.MustNewConstMetric(vxlanTxErrorsDesc, prometheus.GaugeValue, float64(stats.TxErrors))
+		ch <- prometheus.MustNewConstMetric(vxlanRxBytesDesc, prometheus.CounterValue, float64(stats.RxBytes))
+		ch <- prometheus.MustNewConstMetric(vxlanTxBytesDesc, prometheus.CounterValue, float64(stats.TxBytes))
+		ch <- prometheus.MustNewConstMetric(vxlanRxPacketsDesc, prometheus.CounterValue, float64(stats.RxPackets))
+		ch <- prometheus.MustNewConstMetric(vxlanTxPacketsDesc, prometheus.CounterValue, float64(stats.TxPackets))
+		ch <- prometheus.MustNewConstMetric(vxlanRxDroppedDesc, prometheus.CounterValue, float64(stats.RxDropped))
+		ch <- prometheus.MustNewConstMetric(vxlanTxDroppedDesc, prometheus.CounterValue, float64(stats.TxDropped))
+		ch <- prometheus.MustNewConstMetric(vxlanRxErrorsDesc, prometheus.CounterValue, float64(stats.RxErrors))
+		ch <- prometheus.MustNewConstMetric(vxlanTxErrorsDesc, prometheus.CounterValue, float64(stats.TxErrors))
 	}
 
 	// Count FDB entries
@@ -196,13 +196,13 @@ func (c *NetworkStatsCollector) collectPrimaryNIC(ch chan<- prometheus.Metric) {
 		return
 	}
 	if stats := link.Attrs().Statistics; stats != nil {
-		ch <- prometheus.MustNewConstMetric(nicRxBytesDesc, prometheus.GaugeValue, float64(stats.RxBytes))
-		ch <- prometheus.MustNewConstMetric(nicTxBytesDesc, prometheus.GaugeValue, float64(stats.TxBytes))
-		ch <- prometheus.MustNewConstMetric(nicRxPacketsDesc, prometheus.GaugeValue, float64(stats.RxPackets))
-		ch <- prometheus.MustNewConstMetric(nicTxPacketsDesc, prometheus.GaugeValue, float64(stats.TxPackets))
-		ch <- prometheus.MustNewConstMetric(nicRxDroppedDesc, prometheus.GaugeValue, float64(stats.RxDropped))
-		ch <- prometheus.MustNewConstMetric(nicTxDroppedDesc, prometheus.GaugeValue, float64(stats.TxDropped))
-		ch <- prometheus.MustNewConstMetric(nicRxErrorsDesc, prometheus.GaugeValue, float64(stats.RxErrors))
-		ch <- prometheus.MustNewConstMetric(nicTxErrorsDesc, prometheus.GaugeValue, float64(stats.TxErrors))
+		ch <- prometheus.MustNewConstMetric(nicRxBytesDesc, prometheus.CounterValue, float64(stats.RxBytes))
+		ch <- prometheus.MustNewConstMetric(nicTxBytesDesc, prometheus.CounterValue, float64(stats.TxBytes))
+		ch <- prometheus.MustNewConstMetric(nicRxPacketsDesc, prometheus.CounterValue, float64(stats.RxPackets))
+		ch <- prometheus.MustNewConstMetric(nicTxPacketsDesc, prometheus.CounterValue, float64(stats.TxPackets))
+		ch <- prometheus.MustNewConstMetric(nicRxDroppedDesc, prometheus.CounterValue, float64(stats.RxDropped))
+		ch <- prometheus.MustNewConstMetric(nicTxDroppedDesc, prometheus.CounterValue, float64(stats.TxDropped))
+		ch <- prometheus.MustNewConstMetric(nicRxErrorsDesc, prometheus.CounterValue, float64(stats.RxErrors))
+		ch <- prometheus.MustNewConstMetric(nicTxErrorsDesc, prometheus.CounterValue, float64(stats.TxErrors))
 	}
 }
