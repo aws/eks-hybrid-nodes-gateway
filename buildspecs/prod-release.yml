@@ -1,0 +1,14 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - echo "Fetching GitHub token from Secrets Manager..."
+      - export GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id github-hybrid-gateway-token --query 'SecretString' --output text | jq -r '.["github-token"]')
+      - echo "Checking out release tag ${RELEASE_TAG}..."
+      - git init
+      - git remote add origin https://${GITHUB_TOKEN}@github.com/aws/eks-hybrid-nodes-gateway.git
+      - git fetch --depth 1 origin tag ${RELEASE_TAG}
+      - git checkout -f ${RELEASE_TAG}
+  build:
+    commands:
+      - ./hack/prod-release.sh
