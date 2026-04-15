@@ -33,6 +33,11 @@ done
 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
 IMAGE="${ECR_REGISTRY}/eks-hybrid-nodes-gateway:${IMAGE_TAG}"
 
+BASE_IMAGE_REPO="public.ecr.aws/eks-distro-build-tooling"
+BASE_IMAGE_NAME="eks-distro-minimal-base"
+BASE_IMAGE_TAG=$(cat EKS_DISTRO_MINIMAL_BASE_TAG_FILE)
+BASE_IMAGE="${BASE_IMAGE_REPO}/${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG}"
+
 echo "Logging in to ECR..."
 aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" \
   | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
@@ -41,6 +46,7 @@ echo "Building and pushing image ${IMAGE}..."
 /buildkit.sh build \
   --frontend dockerfile.v0 \
   --opt platform=linux/amd64,linux/arm64 \
+  --opt build-arg:BASE_IMAGE="${BASE_IMAGE}" \
   --local context=. \
   --local dockerfile=. \
   --output type=image,name="${IMAGE}",push=true \

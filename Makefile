@@ -3,6 +3,10 @@ IMAGE_NAME ?= eks-hybrid-nodes-gateway
 TAG        ?= latest
 IMAGE      ?= $(REGISTRY)/$(IMAGE_NAME):$(TAG)
 
+BASE_IMAGE_REPO ?= public.ecr.aws/eks-distro-build-tooling
+BASE_IMAGE_NAME ?= eks-distro-minimal-base
+BASE_IMAGE_TAG  ?= $(shell cat EKS_DISTRO_MINIMAL_BASE_TAG_FILE)
+BASE_IMAGE      ?= $(BASE_IMAGE_REPO)/$(BASE_IMAGE_NAME):$(BASE_IMAGE_TAG)
 BIN_DIR    := bin
 
 CHART_DIR  := charts/eks-hybrid-nodes-gateway
@@ -45,11 +49,11 @@ fmt: lint ## Auto-fix formatting (gofumpt + gci)
 
 docker-build: build ## Build multi-arch Docker image (requires REGISTRY)
 	@test -n "$(REGISTRY)" || (echo "error: REGISTRY is required"; exit 1)
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(IMAGE) .
+	docker buildx build --platform linux/amd64,linux/arm64 --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE) .
 
 docker-push: build ## Build and push multi-arch Docker image
 	@test -n "$(REGISTRY)" || (echo "error: REGISTRY is required"; exit 1)
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(IMAGE) --push .
+	docker buildx build --platform linux/amd64,linux/arm64 --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE) --push .
 
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR) coverage.out
@@ -59,7 +63,6 @@ helm-lint: ## Lint the Helm chart
 
 helm-template: ## Render Helm templates locally for review
 	helm template eks-hybrid-nodes-gateway $(CHART_DIR) \
-		--set image.repository=example.com/hybrid-gateway \
 		--set vpcCIDR=10.0.0.0/16 --set podCIDRs=10.86.0.0/16
 
 CHART_VERSION ?=
@@ -69,6 +72,7 @@ helm-package: ## Package Helm chart (optional CHART_VERSION, APP_VERSION)
 	helm package $(CHART_DIR) $(if $(CHART_VERSION),--version $(CHART_VERSION)) $(if $(APP_VERSION),--app-version $(APP_VERSION))
 
 helm-push: helm-package ## Push Helm chart to OCI registry
+	@test -n "$(REGISTRY)" || (echo "error: REGISTRY is required"; exit 1)
 	helm push eks-hybrid-nodes-gateway-*.tgz $(CHART_REPO)
 
 build-e2e: ## Build e2e test binary

@@ -62,8 +62,8 @@ Container image reference. Uses toString to handle numeric tags from --set.
 {{- end }}
 
 {{/*
-Resource namespace. Uses .Values.namespace if set, otherwise .Release.Namespace.
+Resource namespace. Always uses the Helm release namespace (--namespace flag).
 */}}
 {{- define "eks-hybrid-nodes-gateway.namespace" -}}
-{{- default .Release.Namespace .Values.namespace }}
+{{- .Release.Namespace }}
 {{- end }}
