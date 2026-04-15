@@ -57,6 +57,7 @@ make helm-lint
 
 echo "Packaging and pushing Helm chart..."
 make helm-push \
+  REGISTRY="${ECR_REGISTRY}" \
   CHART_REPO="oci://${ECR_REGISTRY}" \
   CHART_VERSION="0.0.0-${IMAGE_TAG}" \
   APP_VERSION="${IMAGE_TAG}"
