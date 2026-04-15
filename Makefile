@@ -8,6 +8,7 @@ BASE_IMAGE_NAME ?= eks-distro-minimal-base
 BASE_IMAGE_TAG  ?= $(shell cat EKS_DISTRO_MINIMAL_BASE_TAG_FILE)
 BASE_IMAGE      ?= $(BASE_IMAGE_REPO)/$(BASE_IMAGE_NAME):$(BASE_IMAGE_TAG)
 BIN_DIR    := bin
+OUTPUT_DIR := _output
 
 CHART_DIR  := charts/eks-hybrid-nodes-gateway
 CHART_REPO ?= oci://$(REGISTRY)
@@ -15,7 +16,7 @@ CHART_REPO ?= oci://$(REGISTRY)
 GOBIN      := $(shell go env GOPATH)/bin
 GINKGO_VERSION := $(word 2,$(shell go list -m github.com/onsi/ginkgo/v2))
 
-.PHONY: build build-amd64 build-arm64 test test-cover lint fmt docker-build docker-push helm-lint helm-template helm-package helm-push ginkgo e2e build-e2e clean help
+.PHONY: build build-amd64 build-arm64 test test-cover lint fmt gather-licenses attribution docker-build docker-push helm-lint helm-template helm-package helm-push ginkgo e2e build-e2e clean help
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -47,16 +48,21 @@ lint: ## Run golangci-lint (auto-installs if missing)
 fmt: lint ## Auto-fix formatting (gofumpt + gci)
 	$(shell go env GOPATH)/bin/golangci-lint fmt
 
+gather-licenses: ## Gather dependency licenses and generate attribution (requires builder-base)
+	hack/generate-attribution.sh
+
 docker-build: build ## Build multi-arch Docker image (requires REGISTRY)
 	@test -n "$(REGISTRY)" || (echo "error: REGISTRY is required"; exit 1)
+	@mkdir -p $(OUTPUT_DIR)/LICENSES && touch $(OUTPUT_DIR)/ATTRIBUTION.txt
 	docker buildx build --platform linux/amd64,linux/arm64 --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE) .
 
 docker-push: build ## Build and push multi-arch Docker image
 	@test -n "$(REGISTRY)" || (echo "error: REGISTRY is required"; exit 1)
+	@mkdir -p $(OUTPUT_DIR)/LICENSES && touch $(OUTPUT_DIR)/ATTRIBUTION.txt
 	docker buildx build --platform linux/amd64,linux/arm64 --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE) --push .
 
 clean: ## Remove build artifacts
-	rm -rf $(BIN_DIR) coverage.out
+	rm -rf $(BIN_DIR) $(OUTPUT_DIR) coverage.out
 
 helm-lint: ## Lint the Helm chart
 	helm lint $(CHART_DIR)

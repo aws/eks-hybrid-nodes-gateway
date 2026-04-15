@@ -7,6 +7,7 @@ COMMIT_SHA="${1:?Usage: build-gateway.sh <commit-sha>}"
 IMAGE_TAG="${COMMIT_SHA:0:8}"
 
 GOLANG_VERSION="1.25"
+export GOPATH="/go"
 export PATH="/go/go${GOLANG_VERSION}/bin:${PATH}"
 go version
 
@@ -29,6 +30,9 @@ echo "Generating checksums..."
 for ARCH in amd64 arm64; do
   (cd bin/linux/${ARCH} && sha256sum gateway > gateway.sha256)
 done
+
+echo "Gathering dependency licenses..."
+make gather-licenses
 
 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
 IMAGE="${ECR_REGISTRY}/eks-hybrid-nodes-gateway:${IMAGE_TAG}"
