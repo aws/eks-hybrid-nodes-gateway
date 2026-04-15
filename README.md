@@ -55,20 +55,21 @@ The gateway is deployed via Helm. The workflow is: build and push a container im
 
 ### 1. Build and Push the Image
 
+The base image is pinned in `EKS_DISTRO_MINIMAL_BASE_TAG_FILE` and passed as a build arg. All CI and Makefile targets read from this file automatically.
+
 ```bash
 make docker-push REGISTRY=<your-ecr-registry>
 ```
 
 ### 2. Install with Helm
 
-Label 2 nodes for MNG deployments, or create a NodePool for Auto Mode (see `helm install` notes for details).
+Label 2 nodes for MNG deployments, or create a NodePool for Auto Mode (see `helm install` notes for details). The image repository defaults to `public.ecr.aws/eks/eks-hybrid-nodes-gateway` and the tag defaults to the chart's `appVersion`. Override with `--set image.repository=...` and `--set image.tag=...` if needed.
 
 **EKS Auto Mode (default):**
 
 ```bash
 helm install eks-hybrid-nodes-gateway ./charts/eks-hybrid-nodes-gateway \
-  --namespace hybrid-gateway --create-namespace \
-  --set image.repository=<your-ecr-registry>/hybrid-gateway \
+  --namespace eks-hybrid-nodes-gateway --create-namespace \
   --set vpcCIDR=10.0.0.0/16 \
   --set podCIDRs=10.250.0.0/16 \
   --set routeTableIDs=rtb-xxx,rtb-yyy
@@ -78,9 +79,8 @@ helm install eks-hybrid-nodes-gateway ./charts/eks-hybrid-nodes-gateway \
 
 ```bash
 helm install eks-hybrid-nodes-gateway ./charts/eks-hybrid-nodes-gateway \
-  --namespace hybrid-gateway --create-namespace \
+  --namespace eks-hybrid-nodes-gateway --create-namespace \
   --set autoMode.enabled=false \
-  --set image.repository=<your-ecr-registry>/hybrid-gateway \
   --set vpcCIDR=10.0.0.0/16 \
   --set podCIDRs=10.250.0.0/16 \
   --set routeTableIDs=rtb-xxx,rtb-yyy
@@ -99,7 +99,7 @@ make helm-push REGISTRY=<your-ecr-registry>
 ### Uninstall
 
 ```bash
-helm uninstall eks-hybrid-nodes-gateway -n hybrid-gateway
+helm uninstall eks-hybrid-nodes-gateway -n eks-hybrid-nodes-gateway
 ```
 
 ## Configuration

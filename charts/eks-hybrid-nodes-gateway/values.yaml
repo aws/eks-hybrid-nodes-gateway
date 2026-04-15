@@ -1,8 +1,8 @@
 # eks-hybrid-nodes-gateway
 
 image:
-  # -- Container image repository (REQUIRED)
-  repository: ""
+  # -- Container image repository
+  repository: public.ecr.aws/eks/eks-hybrid-nodes-gateway
   # -- Image tag, defaults to Chart appVersion
   tag: ""
   # -- Image pull policy
@@ -10,12 +10,6 @@ image:
 
 # -- Number of gateway replicas
 replicas: 2
-
-# -- Namespace for gateway resources. Defaults to the Helm release namespace.
-namespace: ""
-
-# -- Create the namespace resource if it doesn't exist
-createNamespace: true
 
 # -- Node label key used to select gateway nodes
 nodeLabel: hybrid-gateway-node
