@@ -211,13 +211,37 @@ The gateway exposes Prometheus metrics on `:10080/metrics`.
 ├── charts/
 │   └── eks-hybrid-nodes-gateway/ Helm chart with RBAC and Deployment
 ├── hack/build-gateway.sh        CI build script (test → lint → build → Docker → Helm)
+├── hack/connectivity-conformance.sh  Network connectivity test suite
 ├── Makefile                     Build, test, lint, and Helm targets
 └── .github/workflows/           CI: build+test, golangci-lint, helm validation, govulncheck
 ```
 
+## Connectivity Conformance Tests
+
+Validates east-west connectivity between cloud and hybrid nodes after deploying the gateway. Covers pod-to-pod, ClusterIP, DNS, API server, MTU, NodePort, webhook, and LoadBalancer paths.
+
+```bash
+# Run default tests (all except LoadBalancer)
+hack/connectivity-conformance.sh
+
+# Run specific tests
+hack/connectivity-conformance.sh -t pod,dns,mtu
+
+# Include LoadBalancer test (adds ~3-5 min for NLB provisioning)
+hack/connectivity-conformance.sh -t pod,clusterip,dns,api,mtu,nodeport,webhook,loadbalancer
+
+# Skip cleanup for debugging
+hack/connectivity-conformance.sh --skip-cleanup
+
+# Verbose output
+hack/connectivity-conformance.sh -v
+```
+
+Run `hack/connectivity-conformance.sh --help` for all options and environment variables.
+
 ## End-to-End Tests
 
-See [test/e2e/README.md](test/e2e/README.md) for details.
+See [test/e2e/README.md](test/e2e/README.md) for details on the Ginkgo-based e2e test suite.
 
 ```bash
 make e2e \
