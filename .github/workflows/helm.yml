@@ -19,11 +19,13 @@ jobs:
       - name: template auto mode
         run: |
           helm template eks-hybrid-nodes-gateway charts/eks-hybrid-nodes-gateway \
-            --set image.repository=test.example.com/eks-hybrid-nodes-gateway \
-            --set vpcCIDR=10.0.0.0/16 --set podCIDRs=10.86.0.0/16
+            --set vpcCIDR=10.0.0.0/16 \
+            --set podCIDRs=10.86.0.0/16 \
+            --set routeTableIDs=rtb-0123456789abcdef0
       - name: template mng mode
         run: |
           helm template eks-hybrid-nodes-gateway charts/eks-hybrid-nodes-gateway \
             --set autoMode.enabled=false \
-            --set image.repository=test.example.com/eks-hybrid-nodes-gateway \
-            --set vpcCIDR=10.0.0.0/16 --set podCIDRs=10.86.0.0/16
+            --set vpcCIDR=10.0.0.0/16 \
+            --set podCIDRs=10.86.0.0/16 \
+            --set routeTableIDs=rtb-0123456789abcdef0

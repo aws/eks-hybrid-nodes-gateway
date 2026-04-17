@@ -62,7 +62,7 @@ spec:
             - name: POD_CIDRS
               value: {{ required "podCIDRs is required" .Values.podCIDRs | quote }}
             - name: ROUTE_TABLE_IDS
-              value: {{ .Values.routeTableIDs | quote }}
+              value: {{ required "routeTableIDs is required" .Values.routeTableIDs | quote }}
           ports:
             - name: healthz
               containerPort: 8088
