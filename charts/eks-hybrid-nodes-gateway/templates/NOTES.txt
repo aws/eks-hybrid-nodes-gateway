@@ -16,3 +16,5 @@ Taint your gateway nodes to prevent other workloads from scheduling:
 
 Verify the gateway is running:
   kubectl get pods -n {{ .Release.Namespace }} -l {{ include "eks-hybrid-nodes-gateway.selectorLabels" . | replace ": " "=" | replace "\n" "," }}
+
+For more detailed information on getting started, see the Amazon EKS user guide: https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-gateway-overview.html
