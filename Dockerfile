@@ -1,8 +1,8 @@
 ARG BASE_IMAGE=public.ecr.aws/eks-distro-build-tooling/eks-distro-minimal-base:latest
 FROM ${BASE_IMAGE}
 
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+ARG TARGETOS
+ARG TARGETARCH
 
 COPY _output/LICENSES /LICENSES
 COPY _output/ATTRIBUTION.txt /ATTRIBUTION.txt
