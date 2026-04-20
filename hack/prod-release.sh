@@ -79,6 +79,7 @@ CHART_OCI_REPO="oci://$(dirname "${PUBLIC_ECR_URI}")"
 
 echo "==> Packaging Helm chart (version=${CHART_VERSION}, appVersion=${RELEASE_TAG})"
 make helm-push \
+  REGISTRY="${PUBLIC_ECR_URI}" \
   CHART_REPO="${CHART_OCI_REPO}" \
   CHART_VERSION="${CHART_VERSION}" \
   APP_VERSION="${RELEASE_TAG}"
