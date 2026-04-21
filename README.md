@@ -5,22 +5,22 @@ VXLAN gateway for EKS Hybrid Nodes that enables pod-to-pod communication between
 ## Architecture
 
 ```
-┌─── AWS VPC ───────────────────────────────────┐    ┌─── On-Premises ──────────┐
-│                                                │    │                         │
-│  ┌──────────────┐    ┌──────────────┐          │    │  ┌──────────────┐       │
-│  │   Gateway    │    │   Gateway    │          │    │  │ Hybrid Node  │       │
-│  │   (Leader)   │    │  (Standby)   │          │    │  │   (Cilium)   │       │
-│  │              │    │              │          │    │  │              │       │
-│  │ hybrid_vxlan0│    │ hybrid_vxlan0│          │    │  │  cilium_vxlan│       │
-│  └──────┬───────┘    └──────┬───────┘          │    │  └──────┬───────┘       │
-│         │                   │                  │    │         │               │
-│         │  VXLAN (VNI 2, UDP 8472)             │    │         │               │
-│         └───────────┬──────────────────────────┼────┼─────────┘               │
-│                     │                          │    │                         │
-│  VPC Route Table:                              │    │                         │
-│    hybrid-pod-cidr → leader ENI                │    │                         │
-│    (failover → standby ENI)                    │    │                         │
-└────────────────────────────────────────────────┘    └─────────────────────────┘
+┌─── AWS VPC ───────────────────────────────────┐    ┌─── On-Premises ─────────┐
+│                                               │    │                         │
+│  ┌──────────────┐    ┌──────────────┐         │    │  ┌──────────────┐       │
+│  │   Gateway    │    │   Gateway    │         │    │  │ Hybrid Node  │       │
+│  │   (Leader)   │    │  (Standby)   │         │    │  │   (Cilium)   │       │
+│  │              │    │              │         │    │  │              │       │
+│  │ hybrid_vxlan0│    │ hybrid_vxlan0│         │    │  │  cilium_vxlan│       │
+│  └──────┬───────┘    └──────┬───────┘         │    │  └──────┬───────┘       │
+│         │                   │                 │    │         │               │
+│         │  VXLAN (VNI 2, UDP 8472)            │    │         │               │
+│         └───────────┬─────────────────────────┼────┼─────────┘               │
+│                     │                         │    │                         │
+│  VPC Route Table:                             │    │                         │
+│    hybrid-pod-cidr → leader ENI               │    │                         │
+│    (failover → standby ENI)                   │    │                         │
+└───────────────────────────────────────────────┘    └─────────────────────────┘
 ```
 
 **How it works:**
@@ -112,7 +112,7 @@ All configuration is via environment variables or CLI flags:
 | `VPC_CIDR` | `--vpc-cidr` | **required** | Cluster VPC CIDR |
 | `POD_CIDRS` | `--pod-cidrs` | **required** | Comma-separated hybrid pod CIDRs (e.g. `10.250.0.0/16,10.251.0.0/16`) |
 | `LEADER_ELECTION_ID` | `--leader-election-id` | `hybrid-gateway-leader` | Leader election lease name |
-| `ROUTE_TABLE_IDS` | `--route-table-ids` | | Comma-separated VPC route table IDs to program |
+| `ROUTE_TABLE_IDS` | `--route-table-ids` | **required** | Comma-separated VPC route table IDs to program |
 | `AWS_REGION` | `--aws-region` | auto-detected | AWS region (auto-detected from IMDS if not set) |
 | `AWS_INSTANCE_ID` | `--aws-instance-id` | auto-detected | EC2 instance ID (auto-detected from IMDS if not set) |
 | `DEBUG` | `--debug` | `false` | Enable debug logging |

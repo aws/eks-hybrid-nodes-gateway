@@ -39,6 +39,13 @@ spec:
                 matchLabels:
                   {{- include "eks-hybrid-nodes-gateway.selectorLabels" . | nindent 18 }}
               topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "eks-hybrid-nodes-gateway.selectorLabels" . | nindent 20 }}
+                topologyKey: topology.kubernetes.io/zone
       tolerations:
         - key: {{ .Values.nodeLabel }}
           operator: Exists
