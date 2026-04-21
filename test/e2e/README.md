@@ -31,6 +31,7 @@ make docker-push REGISTRY=${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com TAG=${TAG}
 
 # 2. Package and push the Helm chart
 make helm-push \
+  REGISTRY=${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com \
   CHART_REPO=oci://${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com \
   CHART_VERSION=0.0.0-${TAG} \
   APP_VERSION=${TAG}

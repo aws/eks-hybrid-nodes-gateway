@@ -69,7 +69,7 @@ helm-lint: ## Lint the Helm chart
 
 helm-template: ## Render Helm templates locally for review
 	helm template eks-hybrid-nodes-gateway $(CHART_DIR) \
-		--set vpcCIDR=10.0.0.0/16 --set podCIDRs=10.86.0.0/16
+		--set vpcCIDR=10.0.0.0/16 --set podCIDRs=10.86.0.0/16 --set routeTableIDs=rtb-example
 
 CHART_VERSION ?=
 APP_VERSION   ?=
