@@ -6,21 +6,21 @@ VXLAN gateway for EKS Hybrid Nodes that enables pod-to-pod communication between
 
 ```
 ┌─── AWS VPC ───────────────────────────────────┐    ┌─── On-Premises ──────────┐
-│                                                │    │                          │
-│  ┌──────────────┐    ┌──────────────┐          │    │  ┌──────────────┐        │
-│  │   Gateway    │    │   Gateway    │          │    │  │ Hybrid Node  │        │
-│  │   (Leader)   │    │  (Standby)   │          │    │  │   (Cilium)   │        │
-│  │              │    │              │          │    │  │              │        │
-│  │ hybrid_vxlan0│    │ hybrid_vxlan0│          │    │  │  cilium_vxlan│        │
-│  └──────┬───────┘    └──────┬───────┘          │    │  └──────┬───────┘        │
-│         │                   │                  │    │         │                │
-│         │  VXLAN (VNI 2, UDP 8472)             │    │         │                │
-│         └───────────┬──────────────────────────┼────┼─────────┘                │
-│                     │                          │    │                          │
-│  VPC Route Table:                              │    │                          │
-│    hybrid-pod-cidr → leader ENI                │    │                          │
-│    (failover → standby ENI)                    │    │                          │
-└────────────────────────────────────────────────┘    └──────────────────────────┘
+│                                                │    │                         │
+│  ┌──────────────┐    ┌──────────────┐          │    │  ┌──────────────┐       │
+│  │   Gateway    │    │   Gateway    │          │    │  │ Hybrid Node  │       │
+│  │   (Leader)   │    │  (Standby)   │          │    │  │   (Cilium)   │       │
+│  │              │    │              │          │    │  │              │       │
+│  │ hybrid_vxlan0│    │ hybrid_vxlan0│          │    │  │  cilium_vxlan│       │
+│  └──────┬───────┘    └──────┬───────┘          │    │  └──────┬───────┘       │
+│         │                   │                  │    │         │               │
+│         │  VXLAN (VNI 2, UDP 8472)             │    │         │               │
+│         └───────────┬──────────────────────────┼────┼─────────┘               │
+│                     │                          │    │                         │
+│  VPC Route Table:                              │    │                         │
+│    hybrid-pod-cidr → leader ENI                │    │                         │
+│    (failover → standby ENI)                    │    │                         │
+└────────────────────────────────────────────────┘    └─────────────────────────┘
 ```
 
 **How it works:**
