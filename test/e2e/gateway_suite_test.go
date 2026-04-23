@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 	"text/template"
@@ -42,15 +43,16 @@ import (
 const gatewayPolicyName = "eks-hybrid-gateway-e2e"
 
 const (
-	gatewayNamespace          = "eks-hybrid-nodes-gateway"
-	gatewayReleaseName        = "eks-hybrid-nodes-gateway"
-	gatewayNodeLabel          = "hybrid-gateway-node"
-	vxlanPort                 = 8472
-	cloudInstanceType         = "t3.medium"
-	gatewayInstanceType       = "t3.large"
-	httpPort            int32 = 80
-
-	crossVPCPropagationWait = 180 * time.Second
+	gatewayNamespace              = "eks-hybrid-nodes-gateway"
+	gatewayReleaseName            = "eks-hybrid-nodes-gateway"
+	gatewayNodeLabel              = "hybrid-gateway-node"
+	vxlanPort                     = 8472
+	cloudInstanceType             = "t3.medium"
+	gatewayInstanceType           = "t3.large"
+	httpPort                int32 = 80
+	cloudVPCCIDR                  = "10.20.0.0/16"
+	hybridVPCCIDR                 = "10.80.0.0/16"
+	crossVPCPropagationWait       = 30 * time.Second
 )
 
 // Cilium 1.19.0 template pre-rendered with our custom values (VTEP, l7proxy, etc.).
@@ -109,6 +111,8 @@ var _ = SynchronizedBeforeSuite(
 
 		test.Logger.Info("Cleaning up resources from previous runs")
 		cleanupTestResources(ctx, test, gatewayLabels)
+		// Also clean up webhook resources (namespace + cluster-scoped webhook config) from previous runs.
+		cleanupWebhookTest(ctx, test)
 
 		// 1. Create 1 hybrid node (on-prem side).
 		hybridNode := suite.NodeCreate{
@@ -144,12 +148,12 @@ var _ = SynchronizedBeforeSuite(
 		// 4b. Allow VXLAN (UDP 8472) ingress on the cluster security group.
 		clusterSG := getClusterSecurityGroup(ctx, test)
 		test.Logger.Info("Allowing VXLAN ingress on cluster security group", "sgID", clusterSG)
-		allowVXLANIngress(ctx, test, clusterSG)
+		allowVXLANIngress(ctx, test, clusterSG, hybridVPCCIDR)
 
 		// 4c. Allow VXLAN ingress on the hybrid node security group (return path).
 		hybridSG := test.Cluster.SecurityGroupID
 		test.Logger.Info("Allowing VXLAN ingress on hybrid node security group", "sgID", hybridSG)
-		allowVXLANIngress(ctx, test, hybridSG)
+		allowVXLANIngress(ctx, test, hybridSG, cloudVPCCIDR)
 
 		// 5. Attach EC2 route table permissions to the MNG node role.
 		test.Logger.Info("Attaching gateway IAM policy to MNG role")
@@ -184,7 +188,7 @@ var _ = SynchronizedBeforeSuite(
 			GatewayLabels:   gatewayLabels,
 			HybridNodeName:  hybridNodeName,
 			TestRunID:       testRunID,
-			VpcCIDR:         "10.20.0.0/16",
+			VpcCIDR:         cloudVPCCIDR,
 			PodCIDR:         "10.87.0.0/16",
 			GatewayImageURI: gatewayImageURI,
 			RouteTableIDs:   routeTableIDs,
@@ -312,8 +316,9 @@ func extractInstanceID(providerID string) string {
 	return parts[len(parts)-1]
 }
 
-// installGatewayChart pulls the chart from an OCI registry and installs it.
-func installGatewayChart(ctx context.Context, test *suite.PeeredVPCTest, chartURI, chartVersion, imageURI, routeTableIDs string) {
+// newHelmConfig creates a Helm action configuration authenticated to the ECR
+// registry hosting the chart. Used by both install and upgrade.
+func newHelmConfig(ctx context.Context, test *suite.PeeredVPCTest, chartURI string) (*action.Configuration, *cli.EnvSettings) {
 	settings := cli.New()
 	settings.KubeConfig = fmt.Sprintf("/tmp/%s.kubeconfig", test.Cluster.Name)
 	cfg := new(action.Configuration)
@@ -331,7 +336,24 @@ func installGatewayChart(ctx context.Context, test *suite.PeeredVPCTest, chartUR
 	Expect(err).NotTo(HaveOccurred(), "should login to ECR registry %s", ecrHost)
 
 	cfg.RegistryClient = regClient
+	return cfg, settings
+}
 
+func gatewayHelmValues(imageURI, podCIDRs, routeTableIDs string) map[string]interface{} {
+	repo, tag := splitImage(imageURI)
+	return map[string]interface{}{
+		"image":           map[string]interface{}{"repository": repo, "tag": tag},
+		"vpcCIDR":         cloudVPCCIDR,
+		"podCIDRs":        podCIDRs,
+		"routeTableIDs":   routeTableIDs,
+		"createNamespace": false,
+		"autoMode":        map[string]interface{}{"enabled": false},
+	}
+}
+
+// installGatewayChart pulls the chart from an OCI registry and installs it.
+func installGatewayChart(ctx context.Context, test *suite.PeeredVPCTest, chartURI, chartVersion, imageURI, routeTableIDs string) {
+	cfg, settings := newHelmConfig(ctx, test, chartURI)
 	install := action.NewInstall(cfg)
 	install.Namespace = gatewayNamespace
 	install.ReleaseName = gatewayReleaseName
@@ -347,22 +369,7 @@ func installGatewayChart(ctx context.Context, test *suite.PeeredVPCTest, chartUR
 	chart, err := loader.Load(chartPath)
 	Expect(err).NotTo(HaveOccurred(), "should load chart from %s", chartPath)
 
-	repo, tag := splitImage(imageURI)
-	vals := map[string]interface{}{
-		"image": map[string]interface{}{
-			"repository": repo,
-			"tag":        tag,
-		},
-		"vpcCIDR":         "10.20.0.0/16",
-		"podCIDRs":        "10.87.0.0/16",
-		"routeTableIDs":   routeTableIDs,
-		"createNamespace": false,
-		"autoMode": map[string]interface{}{
-			"enabled": false,
-		},
-	}
-
-	_, err = install.RunWithContext(ctx, chart, vals)
+	_, err = install.RunWithContext(ctx, chart, gatewayHelmValues(imageURI, "10.87.0.0/16", routeTableIDs))
 	Expect(err).NotTo(HaveOccurred(), "helm install should succeed")
 }
 
@@ -419,6 +426,7 @@ func labelsToSelector(labels map[string]string) string {
 	for k, v := range labels {
 		parts = append(parts, k+"="+v)
 	}
+	sort.Strings(parts)
 	return strings.Join(parts, ",")
 }
 
@@ -505,8 +513,9 @@ func getClusterSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest) str
 }
 
 // allowVXLANIngress adds an ingress rule for VXLAN (UDP 8472) on the given security group.
-// The rule is not cleaned up because the security group is deleted with the cluster.
-func allowVXLANIngress(ctx context.Context, test *suite.PeeredVPCTest, sgID string) {
+// sourceCIDR scopes the rule to the VPC that originates VXLAN traffic.
+// The rule is idempotent — duplicate rules are silently ignored.
+func allowVXLANIngress(ctx context.Context, test *suite.PeeredVPCTest, sgID, sourceCIDR string) {
 	_, err := test.EC2Client.AuthorizeSecurityGroupIngress(ctx, &ec2v2.AuthorizeSecurityGroupIngressInput{
 		GroupId: aws.String(sgID),
 		IpPermissions: []ec2v2types.IpPermission{
@@ -515,14 +524,15 @@ func allowVXLANIngress(ctx context.Context, test *suite.PeeredVPCTest, sgID stri
 				FromPort:   aws.Int32(vxlanPort),
 				ToPort:     aws.Int32(vxlanPort),
 				IpRanges: []ec2v2types.IpRange{
-					// TODO (pokearu): Scope to exact CIDR
-					{CidrIp: aws.String("0.0.0.0/0"), Description: aws.String("VXLAN from hybrid nodes")},
+					{CidrIp: aws.String(sourceCIDR), Description: aws.String("VXLAN tunnel traffic")},
 				},
 			},
 		},
 	})
-	Expect(err).NotTo(HaveOccurred(), "should allow VXLAN ingress on security group %s", sgID)
-	test.Logger.Info("Added VXLAN ingress rule", "sgID", sgID, "port", vxlanPort)
+	if err != nil && !strings.Contains(err.Error(), "InvalidPermission.Duplicate") {
+		Expect(err).NotTo(HaveOccurred(), "should allow VXLAN ingress on security group %s", sgID)
+	}
+	test.Logger.Info("VXLAN ingress rule ensured", "sgID", sgID, "port", vxlanPort, "sourceCIDR", sourceCIDR)
 }
 
 // roleNameFromARN extracts the role name from an IAM role ARN.
@@ -558,15 +568,32 @@ func upgradeCilium(ctx context.Context, test *suite.PeeredVPCTest) {
 	Expect(err).NotTo(HaveOccurred(), "should apply Cilium template")
 
 	test.Logger.Info("Waiting for cilium DaemonSet to be ready")
-	Eventually(func() bool {
+	Eventually(func(g Gomega) {
 		ds, err := test.K8sClient.Interface.AppsV1().DaemonSets("kube-system").Get(ctx, "cilium", metav1.GetOptions{})
-		if err != nil {
-			return false
-		}
-		return ds.Status.DesiredNumberScheduled > 0 &&
-			ds.Status.DesiredNumberScheduled == ds.Status.NumberReady &&
-			ds.Status.UpdatedNumberScheduled == ds.Status.DesiredNumberScheduled
-	}, 3*time.Minute, 5*time.Second).Should(BeTrue(), "cilium DaemonSet should become ready")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(ds.Status.DesiredNumberScheduled).To(BeNumerically(">", 0))
+		g.Expect(ds.Status.NumberReady).To(Equal(ds.Status.DesiredNumberScheduled))
+		g.Expect(ds.Status.UpdatedNumberScheduled).To(Equal(ds.Status.DesiredNumberScheduled))
+	}).WithTimeout(3*time.Minute).WithPolling(5*time.Second).Should(Succeed(), "cilium DaemonSet should become ready")
 
 	test.Logger.Info("Cilium upgraded successfully")
+}
+
+// upgradeGatewayChart performs a helm upgrade of the gateway release.
+func upgradeGatewayChart(ctx context.Context, test *suite.PeeredVPCTest, chartURI, chartVersion, imageURI, routeTableIDs, podCIDRs string) {
+	cfg, settings := newHelmConfig(ctx, test, chartURI)
+	upgrade := action.NewUpgrade(cfg)
+	upgrade.Namespace = gatewayNamespace
+	upgrade.Wait = true
+	upgrade.Timeout = 5 * time.Minute
+	upgrade.Version = chartVersion
+
+	chartPath, err := upgrade.LocateChart(chartURI, settings)
+	Expect(err).NotTo(HaveOccurred(), "should locate chart from OCI registry: %s:%s", chartURI, chartVersion)
+
+	chart, err := loader.Load(chartPath)
+	Expect(err).NotTo(HaveOccurred(), "should load chart from %s", chartPath)
+
+	_, err = upgrade.RunWithContext(ctx, gatewayReleaseName, chart, gatewayHelmValues(imageURI, podCIDRs, routeTableIDs))
+	Expect(err).NotTo(HaveOccurred(), "helm upgrade should succeed")
 }

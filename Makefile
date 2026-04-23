@@ -92,7 +92,7 @@ ginkgo: ## Install ginkgo binary (pinned to module version)
 		(echo "Installing ginkgo $(GINKGO_VERSION)..." && \
 		 GOBIN=$(GOBIN) CGO_ENABLED=0 go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION))
 
-K8S_VERSION    ?= 1.31
+K8S_VERSION    ?= 1.35
 AWS_REGION     ?= us-west-2
 E2E_TIMEOUT    ?= 60m
 SKIP_CLEANUP   ?= false
