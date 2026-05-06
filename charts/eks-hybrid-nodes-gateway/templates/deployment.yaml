@@ -28,9 +28,13 @@ spec:
       serviceAccountName: {{ include "eks-hybrid-nodes-gateway.serviceAccountName" . }}
       hostNetwork: true
       nodeSelector:
+        {{- with .Values.nodeSelector }}
+        {{- toYaml . | nindent 8 }}
+        {{- else }}
         {{ .Values.nodeLabel }}: "true"
         {{- if .Values.autoMode.enabled }}
         eks.amazonaws.com/compute-type: auto
+        {{- end }}
         {{- end }}
       affinity:
         podAntiAffinity:
@@ -47,9 +51,13 @@ spec:
                     {{- include "eks-hybrid-nodes-gateway.selectorLabels" . | nindent 20 }}
                 topologyKey: topology.kubernetes.io/zone
       tolerations:
+        {{- with .Values.tolerations }}
+        {{- toYaml . | nindent 8 }}
+        {{- else }}
         - key: {{ .Values.nodeLabel }}
           operator: Exists
           effect: NoSchedule
+        {{- end }}
       containers:
         - name: gateway
           image: {{ include "eks-hybrid-nodes-gateway.image" . }}
