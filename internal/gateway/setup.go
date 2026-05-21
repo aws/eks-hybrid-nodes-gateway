@@ -31,7 +31,7 @@ type Setup struct {
 	scheme            *runtime.Scheme
 	vxlanIface        *vxlan.Interface
 	nodeIP            net.IP
-	vpcCIDR           string
+	vpcCIDRs          []string
 	logger            logr.Logger
 }
 
@@ -42,7 +42,7 @@ func NewSetup(
 	scheme *runtime.Scheme,
 	vxlanIface *vxlan.Interface,
 	nodeIP net.IP,
-	vpcCIDR string,
+	vpcCIDRs []string,
 	logger logr.Logger,
 ) *Setup {
 	return &Setup{
@@ -52,7 +52,7 @@ func NewSetup(
 		scheme:            scheme,
 		vxlanIface:        vxlanIface,
 		nodeIP:            nodeIP,
-		vpcCIDR:           vpcCIDR,
+		vpcCIDRs:          vpcCIDRs,
 		logger:            logger,
 	}
 }
@@ -80,13 +80,13 @@ func (g *Setup) Start(ctx context.Context) error {
 	}
 
 	// Upsert CiliumVTEPConfig CRD with the leader's node IP as VTEP endpoint
-	if g.vpcCIDR != "" {
+	if len(g.vpcCIDRs) > 0 {
 		if err := cilium.UpsertCiliumVTEPConfig(
 			ctx,
 			g.k8sClient,
 			g.vxlanIface,
 			g.nodeIP,
-			g.vpcCIDR,
+			g.vpcCIDRs,
 			g.logger,
 		); err != nil {
 			g.logger.Error(err, "Failed to upsert CiliumVTEPConfig")

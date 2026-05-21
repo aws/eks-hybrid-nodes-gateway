@@ -27,13 +27,15 @@ const (
 )
 
 // UpsertCiliumVTEPConfig creates or updates the CiliumVTEPConfig CRD that tells
-// Cilium to route traffic for vpcCIDR via the leader gateway node.
+// Cilium to route traffic for vpcCIDRs via the leader gateway node.
+// Each CIDR gets its own endpoint entry because the CRD schema validates that
+// the cidr field contains a single CIDR value.
 func UpsertCiliumVTEPConfig(
 	ctx context.Context,
 	k8sClient client.Client,
 	vxlanIface *vxlan.Interface,
 	nodeIP net.IP,
-	vpcCIDR string,
+	vpcCIDRs []string,
 	logger logr.Logger,
 ) error {
 	macAddr := vxlanIface.GetMac()
@@ -42,14 +44,21 @@ func UpsertCiliumVTEPConfig(
 		"name", CiliumVTEPConfigName,
 		"tunnelEndpoint", nodeIP.String(),
 		"mac", macAddr,
-		"cidr", vpcCIDR,
+		"cidrs", vpcCIDRs,
 	)
 
-	endpoint := map[string]interface{}{
-		"name":           vtepEndpointName,
-		"tunnelEndpoint": nodeIP.String(),
-		"cidr":           vpcCIDR,
-		"mac":            macAddr,
+	endpoints := make([]interface{}, 0, len(vpcCIDRs))
+	for i, cidr := range vpcCIDRs {
+		name := vtepEndpointName
+		if len(vpcCIDRs) > 1 {
+			name = fmt.Sprintf("%s-%d", vtepEndpointName, i)
+		}
+		endpoints = append(endpoints, map[string]interface{}{
+			"name":           name,
+			"tunnelEndpoint": nodeIP.String(),
+			"cidr":           cidr,
+			"mac":            macAddr,
+		})
 	}
 
 	desired := &unstructured.Unstructured{
@@ -60,7 +69,7 @@ func UpsertCiliumVTEPConfig(
 				"name": CiliumVTEPConfigName,
 			},
 			"spec": map[string]interface{}{
-				"endpoints": []interface{}{endpoint},
+				"endpoints": endpoints,
 			},
 		},
 	}
@@ -82,7 +91,7 @@ func UpsertCiliumVTEPConfig(
 		return nil
 	}
 
-	if !needsUpdate(existing, nodeIP.String(), macAddr, vpcCIDR) {
+	if !needsUpdate(existing, nodeIP.String(), macAddr, vpcCIDRs) {
 		logger.Info("CiliumVTEPConfig already up to date", "name", CiliumVTEPConfigName)
 		return nil
 	}
@@ -99,20 +108,26 @@ func UpsertCiliumVTEPConfig(
 	return nil
 }
 
-func needsUpdate(existing *unstructured.Unstructured, tunnelEndpoint, mac, cidr string) bool {
+func needsUpdate(existing *unstructured.Unstructured, tunnelEndpoint, mac string, cidrs []string) bool {
 	endpoints, found, _ := unstructured.NestedSlice(existing.Object, "spec", "endpoints")
-	if !found || len(endpoints) == 0 {
+	if !found || len(endpoints) != len(cidrs) {
 		return true
 	}
 
-	ep, ok := endpoints[0].(map[string]interface{})
-	if !ok {
-		return true
+	for i, cidr := range cidrs {
+		ep, ok := endpoints[i].(map[string]interface{})
+		if !ok {
+			return true
+		}
+
+		existingIP, _, _ := unstructured.NestedString(ep, "tunnelEndpoint")
+		existingMAC, _, _ := unstructured.NestedString(ep, "mac")
+		existingCIDR, _, _ := unstructured.NestedString(ep, "cidr")
+
+		if existingIP != tunnelEndpoint || existingMAC != mac || existingCIDR != cidr {
+			return true
+		}
 	}
 
-	existingIP, _, _ := unstructured.NestedString(ep, "tunnelEndpoint")
-	existingMAC, _, _ := unstructured.NestedString(ep, "mac")
-	existingCIDR, _, _ := unstructured.NestedString(ep, "cidr")
-
-	return existingIP != tunnelEndpoint || existingMAC != mac || existingCIDR != cidr
+	return false
 }

@@ -50,7 +50,7 @@ func TestUpsertCiliumVTEPConfig_CreatesWhenNotFound(t *testing.T) {
 	logger := testr.New(t)
 	k8sClient := fake.NewClientBuilder().Build()
 
-	err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), "10.0.0.0/16", logger)
+	err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), []string{"10.0.0.0/16"}, logger)
 	require.NoError(t, err)
 
 	obj := &unstructured.Unstructured{}
@@ -79,7 +79,7 @@ func TestUpsertCiliumVTEPConfig_SkipsUpdateWhenUnchanged(t *testing.T) {
 	updateCalled := false
 	wrappedClient := interceptingClient(k8sClient, &updateCalled)
 
-	err := cilium.UpsertCiliumVTEPConfig(ctx, wrappedClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), "10.0.0.0/16", logger)
+	err := cilium.UpsertCiliumVTEPConfig(ctx, wrappedClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), []string{"10.0.0.0/16"}, logger)
 	require.NoError(t, err)
 	assert.False(t, updateCalled, "should not call Update when values unchanged")
 }
@@ -91,7 +91,7 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenChanged(t *testing.T) {
 		existingCIDR string
 		existingMAC  string
 		newIP        string
-		newCIDR      string
+		newCIDRs     []string
 		newMAC       string
 	}{
 		{
@@ -100,7 +100,7 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenChanged(t *testing.T) {
 			existingCIDR: "10.0.0.0/16",
 			existingMAC:  "aa:bb:cc:dd:ee:ff",
 			newIP:        "10.0.2.10",
-			newCIDR:      "10.0.0.0/16",
+			newCIDRs:     []string{"10.0.0.0/16"},
 			newMAC:       "aa:bb:cc:dd:ee:ff",
 		},
 		{
@@ -109,7 +109,7 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenChanged(t *testing.T) {
 			existingCIDR: "10.0.0.0/16",
 			existingMAC:  "aa:bb:cc:dd:ee:ff",
 			newIP:        "10.0.1.5",
-			newCIDR:      "10.20.0.0/16",
+			newCIDRs:     []string{"10.20.0.0/16"},
 			newMAC:       "aa:bb:cc:dd:ee:ff",
 		},
 		{
@@ -118,7 +118,7 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenChanged(t *testing.T) {
 			existingCIDR: "10.0.0.0/16",
 			existingMAC:  "aa:bb:cc:dd:ee:ff",
 			newIP:        "10.0.1.5",
-			newCIDR:      "10.0.0.0/16",
+			newCIDRs:     []string{"10.0.0.0/16"},
 			newMAC:       "11:22:33:44:55:66",
 		},
 	}
@@ -132,7 +132,7 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenChanged(t *testing.T) {
 			k8sClient := fake.NewClientBuilder().WithObjects(existing).Build()
 
 			iface := vxlan.NewInterfaceWithMAC(tt.newMAC)
-			err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, iface, net.ParseIP(tt.newIP), tt.newCIDR, logger)
+			err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, iface, net.ParseIP(tt.newIP), tt.newCIDRs, logger)
 			require.NoError(t, err)
 
 			obj := &unstructured.Unstructured{}
@@ -141,11 +141,11 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenChanged(t *testing.T) {
 			require.NoError(t, err)
 
 			endpoints, _, _ := unstructured.NestedSlice(obj.Object, "spec", "endpoints")
-			require.Len(t, endpoints, 1)
+			require.Len(t, endpoints, len(tt.newCIDRs))
 
 			ep := endpoints[0].(map[string]interface{})
 			assert.Equal(t, tt.newIP, ep["tunnelEndpoint"])
-			assert.Equal(t, tt.newCIDR, ep["cidr"])
+			assert.Equal(t, tt.newCIDRs[0], ep["cidr"])
 			assert.Equal(t, tt.newMAC, ep["mac"])
 		})
 	}
@@ -170,7 +170,7 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenEndpointsEmpty(t *testing.T) {
 	}
 	k8sClient := fake.NewClientBuilder().WithObjects(existing).Build()
 
-	err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), "10.0.0.0/16", logger)
+	err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), []string{"10.0.0.0/16"}, logger)
 	require.NoError(t, err)
 
 	obj := &unstructured.Unstructured{}
@@ -199,7 +199,7 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenNoEndpointsField(t *testing.T) {
 	}
 	k8sClient := fake.NewClientBuilder().WithObjects(existing).Build()
 
-	err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), "10.0.0.0/16", logger)
+	err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), []string{"10.0.0.0/16"}, logger)
 	require.NoError(t, err)
 
 	obj := &unstructured.Unstructured{}
@@ -209,6 +209,37 @@ func TestUpsertCiliumVTEPConfig_UpdatesWhenNoEndpointsField(t *testing.T) {
 
 	endpoints, _, _ := unstructured.NestedSlice(obj.Object, "spec", "endpoints")
 	assert.Len(t, endpoints, 1)
+}
+
+func TestUpsertCiliumVTEPConfig_MultipleCIDRs(t *testing.T) {
+	ctx := context.Background()
+	logger := testr.New(t)
+	k8sClient := fake.NewClientBuilder().Build()
+
+	cidrs := []string{"10.20.0.0/16", "10.30.0.0/16"}
+	err := cilium.UpsertCiliumVTEPConfig(ctx, k8sClient, stubVxlanIface(), net.ParseIP("10.0.1.5"), cidrs, logger)
+	require.NoError(t, err)
+
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumVTEPConfig"})
+	err = k8sClient.Get(ctx, keyForVTEP(), obj)
+	require.NoError(t, err)
+
+	endpoints, found, _ := unstructured.NestedSlice(obj.Object, "spec", "endpoints")
+	assert.True(t, found, "spec.endpoints should exist")
+	assert.Len(t, endpoints, 2)
+
+	ep0 := endpoints[0].(map[string]interface{})
+	assert.Equal(t, "vpc-gateway-0", ep0["name"])
+	assert.Equal(t, "10.0.1.5", ep0["tunnelEndpoint"])
+	assert.Equal(t, "10.20.0.0/16", ep0["cidr"])
+	assert.Equal(t, "aa:bb:cc:dd:ee:ff", ep0["mac"])
+
+	ep1 := endpoints[1].(map[string]interface{})
+	assert.Equal(t, "vpc-gateway-1", ep1["name"])
+	assert.Equal(t, "10.0.1.5", ep1["tunnelEndpoint"])
+	assert.Equal(t, "10.30.0.0/16", ep1["cidr"])
+	assert.Equal(t, "aa:bb:cc:dd:ee:ff", ep1["mac"])
 }
 
 func keyForVTEP() client.ObjectKey {

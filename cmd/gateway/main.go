@@ -112,6 +112,7 @@ func main() {
 	}
 
 	podCIDRList := parseCIDRs(podCIDRs)
+	vpcCIDRList := parseCIDRs(vpcCIDR)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -176,7 +177,7 @@ func main() {
 		mgr.GetScheme(),
 		vxlanIface,
 		localIP,
-		vpcCIDR,
+		vpcCIDRList,
 		logger,
 	)
 	if err := mgr.Add(gatewaySetup); err != nil {
