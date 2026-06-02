@@ -46,7 +46,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.22 // indirect
 	github.com/aws/aws-sdk-go-v2/service/acmpca v1.43.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.65.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.57.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.65.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.31.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ecrpublic v1.37.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.7 // indirect
