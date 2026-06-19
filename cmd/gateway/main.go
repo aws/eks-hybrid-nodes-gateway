@@ -205,6 +205,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&controller.VTEPConfigReconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		VxlanIface: vxlanIface,
+		NodeIP:     localIP,
+		VpcCIDRs:   vpcCIDRList,
+		Logger:     logger,
+	}).SetupWithManager(mgr); err != nil {
+		logger.Error(err, "Unable to create VTEPConfig controller")
+		os.Exit(1)
+	}
+
 	healthServer.SetReady(true)
 
 	// Set gateway info metric with static labels
