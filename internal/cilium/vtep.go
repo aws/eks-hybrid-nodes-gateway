@@ -85,6 +85,10 @@ func UpsertCiliumVTEPConfig(
 		desired.SetGroupVersionKind(ciliumVTEPConfigGVK)
 		desired.SetCreationTimestamp(metav1.Time{})
 		if createErr := k8sClient.Create(ctx, desired); createErr != nil {
+			if k8serrors.IsAlreadyExists(createErr) {
+				logger.Info("CiliumVTEPConfig already exists", "name", CiliumVTEPConfigName)
+				return nil
+			}
 			return fmt.Errorf("creating CiliumVTEPConfig %q: %w", CiliumVTEPConfigName, createErr)
 		}
 		logger.Info("Created CiliumVTEPConfig", "name", CiliumVTEPConfigName)

@@ -13,4 +13,4 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["cilium.io"]
     resources: ["ciliumvtepconfigs"]
-    verbs: ["get", "create", "update"]
+    verbs: ["get", "list", "watch", "create", "update"]

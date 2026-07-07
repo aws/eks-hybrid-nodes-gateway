@@ -11,14 +11,21 @@ import (
 	"time"
 
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/aws/hybrid-gateway/internal/aws"
+	"github.com/aws/hybrid-gateway/internal/cilium"
 	"github.com/aws/hybrid-gateway/internal/controller"
 	"github.com/aws/hybrid-gateway/internal/gateway"
 	"github.com/aws/hybrid-gateway/internal/health"
@@ -155,6 +162,13 @@ func main() {
 		logger.Info("Route table manager ready", "routeTables", rtIDs, "region", awsRegion)
 	}
 
+	vtepCacheObject := &unstructured.Unstructured{}
+	vtepCacheObject.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "cilium.io",
+		Version: "v2",
+		Kind:    "CiliumVTEPConfig",
+	})
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                server.Options{BindAddress: metricsAddr},
@@ -164,6 +178,16 @@ func main() {
 		LeaseDuration:          &leaseDuration,
 		RenewDeadline:          &renewDeadline,
 		RetryPeriod:            &retryPeriod,
+		Cache: cache.Options{
+			SyncPeriod: ptr.To(1 * time.Hour),
+			ByObject: map[client.Object]cache.ByObject{
+				vtepCacheObject: {
+					Field: fields.SelectorFromSet(fields.Set{
+						"metadata.name": cilium.CiliumVTEPConfigName,
+					}),
+				},
+			},
+		},
 	})
 	if err != nil {
 		logger.Error(err, "Unable to create manager")
@@ -202,6 +226,18 @@ func main() {
 		VTEP:   vtep,
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(err, "Unable to create Node controller")
+		os.Exit(1)
+	}
+
+	if err = (&controller.VTEPConfigReconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		VxlanIface: vxlanIface,
+		NodeIP:     localIP,
+		VpcCIDRs:   vpcCIDRList,
+		Logger:     logger,
+	}).SetupWithManager(mgr); err != nil {
+		logger.Error(err, "Unable to create VTEPConfig controller")
 		os.Exit(1)
 	}
 
