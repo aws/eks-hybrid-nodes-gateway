@@ -262,6 +262,12 @@ func createMNG(ctx context.Context, test *suite.PeeredVPCTest, name string, desi
 			ClusterName:   aws.String(test.Cluster.Name),
 			NodegroupName: aws.String(name),
 		})
+		test.Logger.Info("Waiting for MNG deletion", "name", name)
+		deleteWaiter := eks.NewNodegroupDeletedWaiter(test.EKSClient)
+		_ = deleteWaiter.Wait(ctx, &eks.DescribeNodegroupInput{
+			ClusterName:   aws.String(test.Cluster.Name),
+			NodegroupName: aws.String(name),
+		}, 10*time.Minute)
 	})
 }
 
