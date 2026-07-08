@@ -258,10 +258,14 @@ func createMNG(ctx context.Context, test *suite.PeeredVPCTest, name string, desi
 			return
 		}
 		test.Logger.Info("Deleting MNG", "name", name)
-		_, _ = test.EKSClient.DeleteNodegroup(ctx, &eks.DeleteNodegroupInput{
+		_, err := test.EKSClient.DeleteNodegroup(ctx, &eks.DeleteNodegroupInput{
 			ClusterName:   aws.String(test.Cluster.Name),
 			NodegroupName: aws.String(name),
 		})
+		if err != nil {
+			test.Logger.Error(err, "Failed to delete MNG, skipping wait", "name", name)
+			return
+		}
 		test.Logger.Info("Waiting for MNG deletion", "name", name)
 		deleteWaiter := eks.NewNodegroupDeletedWaiter(test.EKSClient)
 		_ = deleteWaiter.Wait(ctx, &eks.DescribeNodegroupInput{
