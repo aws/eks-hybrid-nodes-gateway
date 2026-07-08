@@ -18,7 +18,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+var ciliumVTEPConfigGVR = schema.GroupVersionResource{Group: "cilium.io", Version: "v2", Resource: "ciliumvtepconfigs"}
 
 var _ = Describe("EKS Hybrid Nodes Gateway", func() {
 	When("gateway is deployed with hybrid and cloud nodes", func() {
@@ -224,6 +227,44 @@ var _ = Describe("EKS Hybrid Nodes Gateway", func() {
 					"cloud-to-hybrid max gap should be ≤%s (was %s)", maxAcceptableGap, c2hMaxGap)
 				Expect(h2cMaxGap).To(BeNumerically("<=", maxAcceptableGap),
 					"hybrid-to-cloud max gap should be ≤%s (was %s)", maxAcceptableGap, h2cMaxGap)
+			})
+
+			It("should recreate CiliumVTEPConfig and restore connectivity after deletion", func(ctx context.Context) {
+				testCaseLabels["test-case"] = "ciliumvtepconfig-deletion"
+
+				// 1. Deploy test pods on hybrid and cloud nodes.
+				hybridNodeName, err := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "should find hybrid node")
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, "default", test.Cluster.Region, test.Logger, "nginx-hybrid-vtep", testCaseLabels)
+				Expect(err).NotTo(HaveOccurred())
+
+				cloudNodeName, err := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, "node.kubernetes.io/instance-type", cloudInstanceType, test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "should find cloud node")
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, "default", test.Cluster.Region, test.Logger, "nginx-cloud-vtep", testCaseLabels)
+				Expect(err).NotTo(HaveOccurred())
+
+				// 2. Verify baseline connectivity.
+				test.Logger.Info("Verifying baseline connectivity before CiliumVTEPConfig deletion")
+				err = kubernetes.TestPodToPodConnectivity(ctx, test.K8sClientConfig, test.K8sClient.Interface, "nginx-cloud-vtep", "nginx-hybrid-vtep", "default", test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "baseline cloud \u2192 hybrid should work")
+
+				// 3. Delete CiliumVTEPConfig.
+				test.Logger.Info("Deleting CiliumVTEPConfig to test reconciler recovery")
+				err = test.K8sClient.Dynamic.Resource(ciliumVTEPConfigGVR).Delete(ctx, "hybrid-gateway", metav1.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred(), "should delete CiliumVTEPConfig")
+
+				// 4. Verify CiliumVTEPConfig is recreated by the controller.
+				test.Logger.Info("Waiting for CiliumVTEPConfig to be recreated")
+				Eventually(func(g Gomega) {
+					_, err := test.K8sClient.Dynamic.Resource(ciliumVTEPConfigGVR).Get(ctx, "hybrid-gateway", metav1.GetOptions{})
+					g.Expect(err).NotTo(HaveOccurred(), "CiliumVTEPConfig should be recreated")
+				}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(Succeed())
+
+				// 5. Verify connectivity recovers after recreation.
+				test.Logger.Info("Verifying connectivity recovered after CiliumVTEPConfig recreation")
+				Eventually(func() error {
+					return kubernetes.TestPodToPodConnectivity(ctx, test.K8sClientConfig, test.K8sClient.Interface, "nginx-cloud-vtep", "nginx-hybrid-vtep", "default", test.Logger)
+				}).WithTimeout(60*time.Second).WithPolling(5*time.Second).Should(Succeed(), "connectivity should recover after CiliumVTEPConfig recreation")
 			})
 		})
 
