@@ -26,3 +26,12 @@ autoMode:
   # -- Enable Auto Mode (adds compute-type nodeSelector, zero-downtime strategy).
   # Set to false for Managed Node Groups.
   enabled: true
+
+# -- PodMonitor
+podMonitor:
+  additionalLabels: {}
+  enabled: false
+  # internal: 10s
+  metricRelabelings: []
+  relabelings: []
+  # scrapeTimeout: 10s
