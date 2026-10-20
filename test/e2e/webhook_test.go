@@ -87,7 +87,7 @@ func generateWebhookCerts(serviceName, namespace string) (caPEM, certPEM, keyPEM
 	caPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverDER})
 	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	return
+	return caPEM, certPEM, keyPEM, err
 }
 
 const webhookJS = `function handle(r) {

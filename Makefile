@@ -36,7 +36,7 @@ test-cover: ## Run unit tests with coverage
 	go test -count=1 -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out
 
-GOLANGCI_LINT_VERSION ?= v2.4.0
+GOLANGCI_LINT_VERSION ?= v2.15.0
 
 lint: ## Run golangci-lint (auto-installs if missing)
 	@which golangci-lint > /dev/null 2>&1 || \
