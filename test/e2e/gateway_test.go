@@ -201,7 +201,8 @@ var _ = Describe("EKS Hybrid Nodes Gateway", func() {
 				Eventually(func() (string, error) {
 					return getLeaderPodName(ctx, test)
 				}).WithTimeout(30*time.Second).WithPolling(2*time.Second).ShouldNot(
-					Equal(leaderPodName), "a new leader should be elected after deleting %s", leaderPodName)
+					Equal(leaderPodName), "a new leader should be elected after deleting %s", leaderPodName,
+				)
 
 				newLeader, err := getLeaderPodName(ctx, test)
 				Expect(err).NotTo(HaveOccurred(), "should get new leader pod name")

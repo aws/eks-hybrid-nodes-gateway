@@ -28,7 +28,8 @@ const probeInterval = 500 * time.Millisecond
 // than the pod name, so we match via spec.nodeName.
 func getLeaderPodName(ctx context.Context, test *suite.PeeredVPCTest) (string, error) {
 	lease, err := test.K8sClient.Interface.CoordinationV1().Leases(gatewayNamespace).Get(
-		ctx, "hybrid-gateway-leader", metav1.GetOptions{})
+		ctx, "hybrid-gateway-leader", metav1.GetOptions{},
+	)
 	if err != nil {
 		return "", fmt.Errorf("reading lease: %w", err)
 	}
@@ -104,7 +105,8 @@ func startConnectivityMonitor(
 
 	curlCmd := fmt.Sprintf(
 		"curl -s -o /dev/null -w '%%{http_code}' http://%s:80 --connect-timeout 1 --max-time 2 || true",
-		targetIP)
+		targetIP,
+	)
 
 	go func() {
 		defer close(m.done)
@@ -120,7 +122,8 @@ func startConnectivityMonitor(
 
 			stdout, _, err := kubernetes.ExecPodWithRetries(
 				monCtx, test.K8sClientConfig, test.K8sClient.Interface,
-				clientPod, namespace, "sh", "-c", curlCmd)
+				clientPod, namespace, "sh", "-c", curlCmd,
+			)
 
 			if monCtx.Err() != nil {
 				return
