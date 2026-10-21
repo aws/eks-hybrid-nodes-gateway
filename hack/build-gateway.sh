@@ -6,7 +6,7 @@ set -o pipefail
 COMMIT_SHA="${1:?Usage: build-gateway.sh <commit-sha>}"
 IMAGE_TAG="${COMMIT_SHA:0:8}"
 
-GOLANG_VERSION="1.25"
+GOLANG_VERSION="1.26"
 export GOPATH="/go"
 export PATH="/go/go${GOLANG_VERSION}/bin:${PATH}"
 go version
