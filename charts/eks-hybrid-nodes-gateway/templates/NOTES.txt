@@ -1,7 +1,16 @@
 eks-hybrid-nodes-gateway has been installed.
 
 Ensure your gateway nodes are labeled:
+{{- with $nodeSelector := .Values.nodeSelector }}
+  kubectl label node <node-name>{{ range $k, $v := $nodeSelector }} {{ $k }}={{ $v }}{{ end }}
+{{- else }}
   kubectl label node <node-name> hybrid-gateway-node=true
+{{- end }}
+{{- with $tolerations := .Values.tolerations }}
+Taint your gateway nodes to prevent other workloads from scheduling:
+  kubectl taint node <node-name>{{ range $tolerations }} {{ .key }}{{ with .value }}={{ . }}{{ end }}:{{ .effect }}{{ end }}
+
+{{- else }}
 {{- if .Values.autoMode.enabled }}
 
 EKS Auto Mode is enabled. Create a NodePool separately that targets nodes
@@ -12,6 +21,7 @@ hybrid-gateway-node=true:NoSchedule.
 Managed Node Group mode is enabled.
 Taint your gateway nodes to prevent other workloads from scheduling:
   kubectl taint node <node-name> hybrid-gateway-node=true:NoSchedule
+{{- end }}
 {{- end }}
 
 Verify the gateway is running:
